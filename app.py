@@ -2,8 +2,8 @@
 """
 Streamlit Generative Poster Creator
 
-Refactored from the ipywidgets version for easy deployment on Streamlit Cloud.
-Uses st.sidebar for controls and st.pyplot for plotting.
+Refactored from the ipywidgets version for easy deployment on Streamlit Cloud,
+with added shapes (Triangle, Circle, Rectangle) and bug fixes.
 """
 
 import streamlit as st
@@ -36,21 +36,18 @@ COLOR_PALETTES_DICT = {
 def load_csv_palette():
     """Loads palettes from the CSV file and adds to the dictionary."""
     if not os.path.exists(PALETTE_FILE):
-        # Create an example file if it doesn't exist (helpful for local runs)
         df_init = pd.DataFrame([
             {"name": "csv_sky", "r": 0.4, "g": 0.7, "b": 1.0},
             {"name": "csv_sun", "r": 1.0, "g": 0.8, "b": 0.2},
             {"name": "csv_forest", "r": 0.2, "g": 0.6, "b": 0.3}
         ])
         df_init.to_csv(PALETTE_FILE, index=False)
-        # Note: Streamlit Cloud deployments require this file to be in the repo.
-        st.sidebar.warning(f"'{PALETTE_FILE}' not found. An example was created (but you need to commit it for cloud deployment).")
+        st.sidebar.warning(f"'{PALETTE_FILE}' not found. An example was created (commit to repo for cloud use).")
 
     try:
         df = pd.read_csv(PALETTE_FILE)
         colors = []
         for row in df.itertuples():
-            # Convert to 0-255 range and hex
             r, g, b = int(row.r * 255), int(row.g * 255), int(row.b * 255)
             r, g, b = max(0, min(r, 255)), max(0, min(g, 255)), max(0, min(b, 255))
             colors.append(f'#{r:02x}{g:02x}{b:02x}')
@@ -68,7 +65,7 @@ load_csv_palette()
 PALETTE_NAMES = list(COLOR_PALETTES_DICT.keys())
 
 
-# --- 2. Shape Functions ---
+# --- 2. Shape Functions (Includes original Blob, Heart, Star + new shapes) ---
 
 def create_smooth_blob(center_x, center_y, min_radius, max_radius, num_points):
     """Creates points for a smooth blob."""
@@ -97,6 +94,33 @@ def create_star_points(center_x, center_y, scale, num_points=5):
     x = radii * np.cos(angles)
     y = radii * np.sin(angles)
     return np.array([x + center_x, y + center_y]).T
+
+def create_triangle_points(center_x, center_y, scale):
+    """Creates points for a simple triangle shape."""
+    height = scale * 15
+    side = height / (np.sqrt(3) / 2)
+    # Vertices (top, bottom-right, bottom-left)
+    x = [0, side / 2, -side / 2, 0]
+    y = [height / 2, -height / 2, -height / 2, height / 2]
+    return np.array([np.array(x) + center_x, np.array(y) + center_y]).T
+
+def create_circle_points(center_x, center_y, scale, num_points=100):
+    """Creates points for a smooth circle shape."""
+    radius = scale * 10
+    t = np.linspace(0, 2 * np.pi, num_points)
+    x = radius * np.cos(t)
+    y = radius * np.sin(t)
+    return np.array([x + center_x, y + center_y]).T
+
+def create_rectangle_points(center_x, center_y, scale):
+    """Creates points for a rectangle shape (aspect ratio 3:4 for poster look)."""
+    width = scale * 20
+    height = scale * 26.6
+    
+    x = [-width/2, width/2, width/2, -width/2, -width/2]
+    y = [height/2, height/2, -height/2, -height/2, height/2]
+    
+    return np.array([np.array(x) + center_x, np.array(y) + center_y]).T
 
 
 # --- 3. Drawing Logic ---
@@ -168,23 +192,44 @@ def generate_poster(
         scale_factor = max(0.1, 1.0 - (center_y / HEIGHT) * perspective)
 
         color = random.choice(palette)
+        
+        # Scaling factor based on min_radius for all non-blob shapes
+        base_scale = (min_radius / 70) * scale_factor
 
-        # Get points for the selected shape
+        # 1. Get points for the selected shape
         if shape_type == 'Blob':
             min_rad = min_radius * scale_factor
             max_rad = max_radius * scale_factor
             points = create_smooth_blob(center_x, center_y, min_rad, max_rad, wobble)
         elif shape_type == 'Heart':
-            scale = (min_radius / 70) * scale_factor * 0.7
+            scale = base_scale * 0.7
             points = create_heart_points(center_x, center_y, scale)
         elif shape_type == 'Star':
-            scale = (min_radius / 70) * scale_factor * 2.5
+            scale = base_scale * 2.5
             points = create_star_points(center_x, center_y, scale)
+        elif shape_type == 'Triangle':
+            scale = base_scale * 2.5
+            points = create_triangle_points(center_x, center_y, scale)
+        elif shape_type == 'Circle':
+            scale = base_scale * 2.5
+            points = create_circle_points(center_x, center_y, scale)
+        elif shape_type == 'Rectangle':
+            scale = base_scale * 2.0
+            points = create_rectangle_points(center_x, center_y, scale)
 
         # Draw the 3D shape
         draw_3d_shape(ax, points, color, alpha, shadow_offset)
 
     return fig
+
+
+# --- Helper Function for Download (Placed early to avoid NameError) ---
+def fig_to_bytes(fig):
+    """Converts Matplotlib figure to PNG bytes for download and closes the figure."""
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches='tight')
+    plt.close(fig) # Close figure to free up memory
+    return buf.getvalue()
 
 
 # --- 4. Streamlit UI Setup and Execution ---
@@ -197,18 +242,23 @@ with st.sidebar:
     st.header("Poster Controls")
 
     # Shape and Radius
-    shape_type = st.radio("Shape:", ['Blob', 'Heart', 'Star'], index=0)
-    min_radius = st.slider("Min Radius:", 10, 200, 70, 5)
+    shape_type = st.radio(
+        "Shape:", 
+        ['Blob', 'Heart', 'Star', 'Rectangle', 'Triangle', 'Circle'], # UPDATED LIST
+        index=0
+    )
+    min_radius = st.slider("Min Radius/Base Scale:", 10, 200, 70, 5)
 
-    # Blob-specific control
+    # Blob-specific control visibility
     if shape_type == 'Blob':
-        max_radius = st.slider("Max Radius:", 50, 500, 250, 5)
-        wobble = st.slider("Wobble (Blob):", 4, 20, 6, 1)
+        max_radius = st.slider("Max Radius (Blob):", 50, 500, 250, 5)
+        wobble = st.slider("Wobble Points (Blob):", 4, 20, 6, 1)
+        st.info("Min Radius and Max Radius control the range of sizes.")
     else:
-        # These are functionally irrelevant for Heart/Star but need values for the function call
+        # Default/ignored values for other shapes
         max_radius = 500
         wobble = 6
-        st.info("Max Radius and Wobble control only applies to the 'Blob' shape.")
+        st.info("For other shapes, 'Min Radius/Base Scale' controls the size.")
 
     # Appearance
     st.subheader("Appearance & Effects")
@@ -221,7 +271,6 @@ with st.sidebar:
     # Seed
     st.subheader("Randomness")
     default_seed = random.randint(0, 10000)
-    # Use st.session_state to ensure the default seed is consistent across reruns
     if 'seed' not in st.session_state:
         st.session_state.seed = default_seed
     seed = st.number_input("Seed:", 0, 10000, st.session_state.seed, 1, key='seed_input')
@@ -244,18 +293,10 @@ poster_fig = generate_poster(
 # st.pyplot displays the matplotlib figure
 st.pyplot(poster_fig)
 
-# --- Helper Function for Download ---
-def fig_to_bytes(fig):
-    """Converts Matplotlib figure to PNG bytes for download and closes the figure."""
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches='tight')
-    plt.close(fig) # Close figure to free up memory
-    return buf.getvalue()
-
-# Optional: Add download button
+# Add download button
 st.download_button(
     label="Download Poster (PNG)",
-    data=fig_to_bytes(poster_fig),
+    data=fig_to_bytes(poster_fig), # fig_to_bytes is defined above
     file_name="generative_poster.png",
     mime="image/png"
 )
