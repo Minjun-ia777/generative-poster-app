@@ -249,7 +249,7 @@ with st.sidebar:
 
     # Blob-specific control visibility
     if shape_type == 'Blob':
-        max_radius = st.slider("Max Radius (Blob):", 50, 10000, 250, 5)
+        max_radius = st.slider("Max Radius (Blob):", 50, 1000, 250, 5)
         wobble = st.slider("Wobble Points (Blob):", 4, 20, 6, 1)
         st.info("Min Radius and Max Radius control the range of sizes.")
     else:
