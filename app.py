@@ -2,7 +2,8 @@
 """
 Streamlit Generative Poster Creator
 
-Final version with restored seed range and expanded shape list.
+Final version with all shapes, expanded scaling for fixed shapes,
+restored seed/palette options, and fixed NameError.
 """
 
 import streamlit as st
@@ -28,8 +29,8 @@ COLOR_PALETTES_DICT = {
     "Pastel": {"palette": ["#FFADAD", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#9BF6FF", "#A0C4FF", "#BDB2FF"], "bg": "#F0EAD6"},
     "Vivid": {"palette": ["#FF595E", "#FFCA3A", "#8AC926", "#1982C4", "#6A4C93", "#F58553"], "bg": "#FFFFFF"},
     "Monochrome": {"palette": ["#222222", "#555555", "#888888", "#BBBBBB", "#EEEEEE"], "bg": "#D1D1D1"},
-    "Ocean": {"palette": ["#0077B6", "#0096C7", "#00B4D8", "#48CAE4", "#90E0EF"], "bg": "#F0F8FF"}, # New Example
-    "Sunset": {"palette": ["#E76F51", "#F4A261", "#E9C46A", "#2A9D8F", "#264653"], "bg": "#FFFBEF"} # New Example
+    "Ocean": {"palette": ["#0077B6", "#0096C7", "#00B4D8", "#48CAE4", "#90E0EF"], "bg": "#F0F8FF"},
+    "Sunset": {"palette": ["#E76F51", "#F4A261", "#E9C46A", "#2A9D8F", "#264653"], "bg": "#FFFBEF"}
 }
 
 # Use Streamlit's cache to only run this once
@@ -157,7 +158,8 @@ def generate_poster(
     alpha,
     shadow_offset,
     perspective,
-    seed
+    seed,
+    poster_size_factor # Parameter for scaling the final output
     ):
     """
     Generates one poster based on the widget values.
@@ -167,8 +169,8 @@ def generate_poster(
     np.random.seed(seed)
     random.seed(seed)
 
-    # Create figure and axes
-    fig, ax = plt.subplots(figsize=(10, 13))
+    # Create figure and axes, scaled by poster_size_factor
+    fig, ax = plt.subplots(figsize=(10 * poster_size_factor, 13 * poster_size_factor))
 
     # Get palette and background
     palette_info = COLOR_PALETTES_DICT[palette_name]
@@ -200,19 +202,24 @@ def generate_poster(
             max_rad = max_radius * scale_factor
             points = create_smooth_blob(center_x, center_y, min_rad, max_rad, wobble)
         elif shape_type == 'Heart':
-            scale = base_scale * 0.7
+            # Increased multiplier for larger size
+            scale = base_scale * 2.0 
             points = create_heart_points(center_x, center_y, scale)
         elif shape_type == 'Star':
-            scale = base_scale * 2.5
+            # Increased multiplier for larger size
+            scale = base_scale * 7.0 
             points = create_star_points(center_x, center_y, scale)
         elif shape_type == 'Triangle':
-            scale = base_scale * 2.5
+            # Increased multiplier for larger size
+            scale = base_scale * 7.0
             points = create_triangle_points(center_x, center_y, scale)
         elif shape_type == 'Circle':
-            scale = base_scale * 2.5
+            # Increased multiplier for larger size
+            scale = base_scale * 7.0
             points = create_circle_points(center_x, center_y, scale)
         elif shape_type == 'Rectangle':
-            scale = base_scale * 2.0
+            # Increased multiplier for larger size
+            scale = base_scale * 5.0
             points = create_rectangle_points(center_x, center_y, scale)
 
         # Draw the 3D shape
@@ -239,7 +246,12 @@ st.markdown("Use the controls in the sidebar to create a unique poster!")
 with st.sidebar:
     st.header("Poster Controls")
 
+    # Poster Size Control (New)
+    st.subheader("Display & Resolution")
+    poster_size_factor = st.slider("Poster Size (Scaling Factor):", 0.5, 2.0, 1.0, 0.1)
+
     # Shape and Radius
+    st.subheader("Shape & Size")
     shape_type = st.radio(
         "Shape:", 
         ['Blob', 'Heart', 'Star', 'Rectangle', 'Triangle', 'Circle'],
@@ -249,11 +261,11 @@ with st.sidebar:
 
     # Blob-specific control visibility
     if shape_type == 'Blob':
-        max_radius = st.slider("Max Radius (Blob):", 50, 1000, 250, 5)
+        # Max radius now up to 1000
+        max_radius = st.slider("Max Radius (Blob):", 50, 1000, 250, 5) 
         wobble = st.slider("Wobble Points (Blob):", 4, 20, 6, 1)
         st.info("Min Radius and Max Radius control the range of sizes.")
     else:
-        # Default/ignored values for other shapes
         max_radius = 500
         wobble = 6
         st.info("For other shapes, 'Min Radius/Base Scale' controls the size.")
@@ -268,12 +280,11 @@ with st.sidebar:
 
     # Seed (Restored to original wider range)
     st.subheader("Randomness")
-    default_seed = random.randint(0, 50000)
+    default_seed = random.randint(0, 10000)
     if 'seed' not in st.session_state:
         st.session_state.seed = default_seed
     
-    # MAXIMUM SEED VALUE RESTORED TO 10000
-    seed = st.number_input("Seed:", 0, 50000, st.session_state.seed, 1, key='seed_input')
+    seed = st.number_input("Seed:", 0, 10000, st.session_state.seed, 1, key='seed_input')
     st.session_state.seed = seed
 
 # Generate the poster
@@ -287,7 +298,8 @@ poster_fig = generate_poster(
     alpha,
     shadow_offset,
     perspective,
-    seed
+    seed,
+    poster_size_factor # Pass the new argument
 )
 
 # st.pyplot displays the matplotlib figure
