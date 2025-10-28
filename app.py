@@ -2,8 +2,7 @@
 """
 Streamlit Generative Poster Creator
 
-Refactored from the ipywidgets version for easy deployment on Streamlit Cloud,
-with added shapes (Triangle, Circle, Rectangle) and bug fixes.
+Final version with restored seed range and expanded shape list.
 """
 
 import streamlit as st
@@ -14,7 +13,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from scipy.interpolate import splprep, splev
-from io import BytesIO # Needed for the download button functionality
+from io import BytesIO 
 
 # Set wide mode for a better layout
 st.set_page_config(layout="wide", page_title="Generative Poster Creator")
@@ -24,11 +23,13 @@ st.set_page_config(layout="wide", page_title="Generative Poster Creator")
 PALETTE_FILE = "palette.csv"
 WIDTH, HEIGHT = 1200, 1600 # Define global constants for poster size
 
-# Default palettes
+# Default palettes (feel free to add more here!)
 COLOR_PALETTES_DICT = {
     "Pastel": {"palette": ["#FFADAD", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#9BF6FF", "#A0C4FF", "#BDB2FF"], "bg": "#F0EAD6"},
     "Vivid": {"palette": ["#FF595E", "#FFCA3A", "#8AC926", "#1982C4", "#6A4C93", "#F58553"], "bg": "#FFFFFF"},
-    "Monochrome": {"palette": ["#222222", "#555555", "#888888", "#BBBBBB", "#EEEEEE"], "bg": "#D1D1D1"}
+    "Monochrome": {"palette": ["#222222", "#555555", "#888888", "#BBBBBB", "#EEEEEE"], "bg": "#D1D1D1"},
+    "Ocean": {"palette": ["#0077B6", "#0096C7", "#00B4D8", "#48CAE4", "#90E0EF"], "bg": "#F0F8FF"}, # New Example
+    "Sunset": {"palette": ["#E76F51", "#F4A261", "#E9C46A", "#2A9D8F", "#264653"], "bg": "#FFFBEF"} # New Example
 }
 
 # Use Streamlit's cache to only run this once
@@ -65,7 +66,7 @@ load_csv_palette()
 PALETTE_NAMES = list(COLOR_PALETTES_DICT.keys())
 
 
-# --- 2. Shape Functions (Includes original Blob, Heart, Star + new shapes) ---
+# --- 2. Shape Functions ---
 
 def create_smooth_blob(center_x, center_y, min_radius, max_radius, num_points):
     """Creates points for a smooth blob."""
@@ -99,7 +100,6 @@ def create_triangle_points(center_x, center_y, scale):
     """Creates points for a simple triangle shape."""
     height = scale * 15
     side = height / (np.sqrt(3) / 2)
-    # Vertices (top, bottom-right, bottom-left)
     x = [0, side / 2, -side / 2, 0]
     y = [height / 2, -height / 2, -height / 2, height / 2]
     return np.array([np.array(x) + center_x, np.array(y) + center_y]).T
@@ -116,10 +116,8 @@ def create_rectangle_points(center_x, center_y, scale):
     """Creates points for a rectangle shape (aspect ratio 3:4 for poster look)."""
     width = scale * 20
     height = scale * 26.6
-    
     x = [-width/2, width/2, width/2, -width/2, -width/2]
     y = [height/2, height/2, -height/2, -height/2, height/2]
-    
     return np.array([np.array(x) + center_x, np.array(y) + center_y]).T
 
 
@@ -181,7 +179,7 @@ def generate_poster(
     ax.set_xlim(0, WIDTH)
     ax.set_ylim(0, HEIGHT)
     ax.axis('off')
-    ax.set_aspect('equal') # Ensure shapes aren't stretched
+    ax.set_aspect('equal')
 
     for i in range(layers):
         # Position
@@ -223,12 +221,12 @@ def generate_poster(
     return fig
 
 
-# --- Helper Function for Download (Placed early to avoid NameError) ---
+# --- Helper Function for Download ---
 def fig_to_bytes(fig):
     """Converts Matplotlib figure to PNG bytes for download and closes the figure."""
     buf = BytesIO()
     fig.savefig(buf, format="png", bbox_inches='tight')
-    plt.close(fig) # Close figure to free up memory
+    plt.close(fig) 
     return buf.getvalue()
 
 
@@ -244,7 +242,7 @@ with st.sidebar:
     # Shape and Radius
     shape_type = st.radio(
         "Shape:", 
-        ['Blob', 'Heart', 'Star', 'Rectangle', 'Triangle', 'Circle'], # UPDATED LIST
+        ['Blob', 'Heart', 'Star', 'Rectangle', 'Triangle', 'Circle'],
         index=0
     )
     min_radius = st.slider("Min Radius/Base Scale:", 10, 200, 70, 5)
@@ -268,11 +266,13 @@ with st.sidebar:
     shadow_offset = st.slider("Shadow Offset:", 0, 50, 10, 1)
     perspective = st.slider("Perspective (Vertical Scale):", 0.0, 1.0, 0.6, 0.05)
 
-    # Seed
+    # Seed (Restored to original wider range)
     st.subheader("Randomness")
     default_seed = random.randint(0, 10000)
     if 'seed' not in st.session_state:
         st.session_state.seed = default_seed
+    
+    # MAXIMUM SEED VALUE RESTORED TO 10000
     seed = st.number_input("Seed:", 0, 10000, st.session_state.seed, 1, key='seed_input')
     st.session_state.seed = seed
 
@@ -296,7 +296,7 @@ st.pyplot(poster_fig)
 # Add download button
 st.download_button(
     label="Download Poster (PNG)",
-    data=fig_to_bytes(poster_fig), # fig_to_bytes is defined above
+    data=fig_to_bytes(poster_fig), 
     file_name="generative_poster.png",
     mime="image/png"
 )
