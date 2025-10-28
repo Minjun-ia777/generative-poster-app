@@ -14,6 +14,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from scipy.interpolate import splprep, splev
+from io import BytesIO # Needed for the download button functionality
 
 # Set wide mode for a better layout
 st.set_page_config(layout="wide", page_title="Generative Poster Creator")
@@ -35,20 +36,21 @@ COLOR_PALETTES_DICT = {
 def load_csv_palette():
     """Loads palettes from the CSV file and adds to the dictionary."""
     if not os.path.exists(PALETTE_FILE):
-        # Create an example file if it doesn't exist
+        # Create an example file if it doesn't exist (helpful for local runs)
         df_init = pd.DataFrame([
             {"name": "csv_sky", "r": 0.4, "g": 0.7, "b": 1.0},
             {"name": "csv_sun", "r": 1.0, "g": 0.8, "b": 0.2},
             {"name": "csv_forest", "r": 0.2, "g": 0.6, "b": 0.3}
         ])
         df_init.to_csv(PALETTE_FILE, index=False)
-        st.sidebar.warning(f"'{PALETTE_FILE}' not found. An example file was created. Please edit it and run the app again.")
+        # Note: Streamlit Cloud deployments require this file to be in the repo.
+        st.sidebar.warning(f"'{PALETTE_FILE}' not found. An example was created (but you need to commit it for cloud deployment).")
 
     try:
         df = pd.read_csv(PALETTE_FILE)
         colors = []
         for row in df.itertuples():
-            # Ensure values are in the 0-255 range
+            # Convert to 0-255 range and hex
             r, g, b = int(row.r * 255), int(row.g * 255), int(row.b * 255)
             r, g, b = max(0, min(r, 255)), max(0, min(g, 255)), max(0, min(b, 255))
             colors.append(f'#{r:02x}{g:02x}{b:02x}')
@@ -66,7 +68,7 @@ load_csv_palette()
 PALETTE_NAMES = list(COLOR_PALETTES_DICT.keys())
 
 
-# --- 2. Shape Functions (Re-used as-is) ---
+# --- 2. Shape Functions ---
 
 def create_smooth_blob(center_x, center_y, min_radius, max_radius, num_points):
     """Creates points for a smooth blob."""
@@ -97,7 +99,7 @@ def create_star_points(center_x, center_y, scale, num_points=5):
     return np.array([x + center_x, y + center_y]).T
 
 
-# --- 3. Drawing Logic (Re-used as-is) ---
+# --- 3. Drawing Logic ---
 
 def draw_3d_shape(ax, points, color, alpha, shadow_offset):
     """Draws any selected shape with shadow and highlight."""
@@ -191,23 +193,22 @@ st.title("Generative Poster Creator 🎨")
 st.markdown("Use the controls in the sidebar to create a unique poster!")
 
 # --- Widget Definitions in the Sidebar ---
-# The st.sidebar allows the controls to be tucked away nicely.
 with st.sidebar:
     st.header("Poster Controls")
-    
+
     # Shape and Radius
     shape_type = st.radio("Shape:", ['Blob', 'Heart', 'Star'], index=0)
     min_radius = st.slider("Min Radius:", 10, 200, 70, 5)
-    
+
     # Blob-specific control
     if shape_type == 'Blob':
         max_radius = st.slider("Max Radius:", 50, 500, 250, 5)
         wobble = st.slider("Wobble (Blob):", 4, 20, 6, 1)
     else:
-        # Use min_radius for the general scale of Heart/Star, max_radius/wobble are irrelevant
-        max_radius = 500 # Default/ignored value
-        wobble = 6 # Default/ignored value
-        st.info("Max Radius and Wobble are only for the 'Blob' shape.")
+        # These are functionally irrelevant for Heart/Star but need values for the function call
+        max_radius = 500
+        wobble = 6
+        st.info("Max Radius and Wobble control only applies to the 'Blob' shape.")
 
     # Appearance
     st.subheader("Appearance & Effects")
@@ -220,9 +221,13 @@ with st.sidebar:
     # Seed
     st.subheader("Randomness")
     default_seed = random.randint(0, 10000)
-    seed = st.number_input("Seed:", 0, 10000, default_seed, 1)
+    # Use st.session_state to ensure the default seed is consistent across reruns
+    if 'seed' not in st.session_state:
+        st.session_state.seed = default_seed
+    seed = st.number_input("Seed:", 0, 10000, st.session_state.seed, 1, key='seed_input')
+    st.session_state.seed = seed
 
-# Generate and display the poster
+# Generate the poster
 poster_fig = generate_poster(
     layers,
     palette_name,
@@ -239,6 +244,14 @@ poster_fig = generate_poster(
 # st.pyplot displays the matplotlib figure
 st.pyplot(poster_fig)
 
+# --- Helper Function for Download ---
+def fig_to_bytes(fig):
+    """Converts Matplotlib figure to PNG bytes for download and closes the figure."""
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches='tight')
+    plt.close(fig) # Close figure to free up memory
+    return buf.getvalue()
+
 # Optional: Add download button
 st.download_button(
     label="Download Poster (PNG)",
@@ -246,10 +259,3 @@ st.download_button(
     file_name="generative_poster.png",
     mime="image/png"
 )
-
-# Helper function to convert Matplotlib figure to PNG bytes for download
-from io import BytesIO
-def fig_to_bytes(fig):
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches='tight')
-    return buf.getvalue()
