@@ -249,7 +249,7 @@ with st.sidebar:
 
     # Blob-specific control visibility
     if shape_type == 'Blob':
-        max_radius = st.slider("Max Radius (Blob):", 50, 500, 250, 5)
+        max_radius = st.slider("Max Radius (Blob):", 50, 10000, 250, 5)
         wobble = st.slider("Wobble Points (Blob):", 4, 20, 6, 1)
         st.info("Min Radius and Max Radius control the range of sizes.")
     else:
@@ -268,12 +268,12 @@ with st.sidebar:
 
     # Seed (Restored to original wider range)
     st.subheader("Randomness")
-    default_seed = random.randint(0, 10000)
+    default_seed = random.randint(0, 50000)
     if 'seed' not in st.session_state:
         st.session_state.seed = default_seed
     
     # MAXIMUM SEED VALUE RESTORED TO 10000
-    seed = st.number_input("Seed:", 0, 10000, st.session_state.seed, 1, key='seed_input')
+    seed = st.number_input("Seed:", 0, 50000, st.session_state.seed, 1, key='seed_input')
     st.session_state.seed = seed
 
 # Generate the poster
